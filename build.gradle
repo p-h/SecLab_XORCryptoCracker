@@ -1,0 +1,29 @@
+apply plugin: 'java'
+apply plugin: 'application'
+
+dependencies {
+    compile files("lib/jmathplot.jar")
+}
+
+startScripts.enabled = false
+run.enabled = false
+
+["XorAndCompressCrackerApp", "XorCrackerApp", "HistogramApp", "XorWithKeyApp"].each { name ->
+    project.tasks.create(name, CreateStartScripts) {
+        println(name)
+        mainClassName = name
+        applicationName = name
+        classpath = startScripts.classpath
+        outputDir = startScripts.outputDir
+    }
+
+    def myTask = project.tasks[name]
+    myTask.dependsOn(project.jar)
+
+    project.applicationDistribution.into("bin") {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(myTask)
+        fileMode = 0755
+    }
+}
+
