@@ -6,6 +6,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Optional;
 
 /**
  * Application for cracking the encryption of files that have been
@@ -27,8 +28,19 @@ import java.io.IOException;
  * @author tebe
  */
 public class XorCrackerApp {
-    private static int keylength;
-    private static String filename;
+    private int keylength;
+    private String filename;
+    private int mostFrequentCharacter;
+
+    public XorCrackerApp(String filename, int keylength) {
+        this(filename, keylength, 'e');
+    }
+
+    public XorCrackerApp(String filename, int keylength, int mostFrequentCharacter) {
+        this.filename = filename;
+        this.keylength = keylength;
+        this.mostFrequentCharacter = mostFrequentCharacter;
+    }
 
     /**
      * Main method of the application
@@ -36,15 +48,14 @@ public class XorCrackerApp {
      * @param args Command line arguments
      */
     public static void main(String[] args) {
-        if (parseCommandLineParameters(args)) {
+        Optional<XorCrackerApp> app = parseCommandLineParametersToApp(args);
+        app.ifPresentOrElse(a -> {
             try {
-                run();
+                a.run();
             } catch (IOException e) {
                 System.out.println(e.getMessage());
             }
-        } else {
-            usage();
-        }
+        }, XorCrackerApp::usage);
     }
 
     private static void usage() {
@@ -57,16 +68,22 @@ public class XorCrackerApp {
      * @param args Command line arguments
      * @return true, if the arguments could be parsed
      */
-    private static boolean parseCommandLineParameters(String args[]) {
-        if (args.length == 2) {
+    private static Optional<XorCrackerApp> parseCommandLineParametersToApp(String args[]) {
+        if (args.length >= 2) {
             try {
-                filename = args[0];
-                keylength = Integer.parseInt(args[1]);
-                return true;
+                String filename = args[0];
+                int keylength = Integer.parseInt(args[1]);
+
+                if (args.length >= 3) {
+                    int mostFrequent = (int) args[2].charAt(0);
+                    return Optional.of(new XorCrackerApp(filename, keylength, mostFrequent));
+                }
+
+                return Optional.of(new XorCrackerApp(filename, keylength));
             } catch (NumberFormatException e) {
             }
         }
-        return false;
+        return Optional.empty();
     }
 
 
@@ -75,10 +92,10 @@ public class XorCrackerApp {
      *
      * @throws IOException
      */
-    private static void run() throws IOException {
+    private void run() throws IOException {
         try {
             System.out.println("Number of candidate keys: " + getNumberOfCandidateKeys());
-            int[] key = getCandidateKey(filename, keylength, 0x65);
+            int[] key = getCandidateKey(filename, keylength, mostFrequentCharacter);
             System.out.println(HexTools.intArrayToHexString(key));
         } catch (IOException e) {
             e.printStackTrace();
@@ -104,10 +121,9 @@ public class XorCrackerApp {
         DataInputStream inputStream = new DataInputStream(new BufferedInputStream(new FileInputStream(filename)));
         ByteFrequencyTable[] frequencyTable = ByteFrequencyTableHelpers.getFrequencyTableForKeyLength(keylength, inputStream);
         int[] key = new int[keylength];
-        for (int keyByte = 0; keyByte < keylength; keyByte++) {
-
-            //TODO: Determine byte 'keyByte' of the key
-
+        for (int i = 0; i < keylength; i++) {
+            int maxHx = frequencyTable[i].getMostFrequentByte();
+            key[i] = maxHx ^ mostFrequentValue;
         }
         return key;
     }
