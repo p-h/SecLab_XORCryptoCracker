@@ -1,5 +1,6 @@
 package ch.zhaw.init.is.util;
 
+import java.text.DecimalFormat;
 import java.util.TimerTask;
 
 /**
@@ -22,7 +23,8 @@ public class ProgressTask extends TimerTask {
         double current = cracker.getProgressAbsolute();
         double diff = current - lastTotalTrials;
         long diffTime = System.currentTimeMillis() - lastTimestamp;
-        System.out.println(diff / (diffTime / 1000) + " " + cracker.getUnit() + "/s (Completed: " + cracker.getProgressInPercent() + "%)");
+        String percentProgress = new DecimalFormat("#0.00").format(cracker.getProgressInPercent());
+        System.out.println(diff / (diffTime / 1000) + " " + cracker.getUnit() + "/s (Completed: " + percentProgress + "%)");
         lastTotalTrials = current;
         lastTimestamp = diffTime + lastTimestamp;
     }
