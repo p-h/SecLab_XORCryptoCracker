@@ -43,17 +43,15 @@ public class XorAndCompressCracker implements ProgressInfo {
         totalNumberOfKeysToTest = getNumberOfCandidateKeys(keylength, depth);
         numberOfKeysTested.set(0);
         ByteFrequencyTable[] frequencyTable = getFrequencyTableForKeyLength(keylength);
-        int[] key = null;
 
         ExecutorService pool = Executors.newWorkStealingPool();
 
         KeyGenerator keyGenerator = new KeyGenerator(frequencyTable, depth, 0);
-        keyGenerator.getKeyStream()
+        Optional<int[]> maybeKey = keyGenerator.getKeyStream()
                 .map(k -> CompletableFuture.supplyAsync(() -> {
-                    new ThreadLocal<EncryptedZipFile>();
                     numberOfKeysTested.incrementAndGet();
-                    if (localEncryptedZipFile.get().tryDecryption(k)) return Optional.of(k);
-                    else return Optional.empty();
+                    if (localEncryptedZipFile.get().tryDecryption(k)) return k;
+                    return null;
                 }, pool))
                 .map(f -> {
                     try {
@@ -61,13 +59,13 @@ public class XorAndCompressCracker implements ProgressInfo {
                     } catch (InterruptedException | ExecutionException e) {
                     }
 
-                    return Optional.empty();
+                    return null;
                 })
-                .filter(Optional::isPresent)
+                .filter(o -> o != null)
                 .findFirst();
 
 
-        return null;
+        return maybeKey.orElse(null);
     }
 
     private ByteFrequencyTable[] getFrequencyTableForKeyLength(int keylength) throws IOException {
