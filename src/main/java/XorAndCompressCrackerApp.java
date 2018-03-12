@@ -61,6 +61,7 @@ public class XorAndCompressCrackerApp {
      * @return true, if the arguments could be parsed
      */
     private static boolean parseCommandLineParameters(String args[]) {
+        System.out.println("available processors: " + Runtime.getRuntime().availableProcessors());
         if (args.length == 3) {
             try {
                 filename = args[0];

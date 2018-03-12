@@ -16,28 +16,54 @@ public class EncryptedZipFile {
     private byte[] decryptedZipFile;
     private ByteArrayInputStream inputStreamDecryptedZipFile;
 
-    public EncryptedZipFile(String filename) throws IOException {
+    public static EncryptedZipFile create(String filename) throws IOException {
+        EncryptedZipFile file = null;
         BufferedInputStream inputStream = null;
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
         try {
             inputStream = new BufferedInputStream(new FileInputStream(filename));
-            int tempByte;
-            while ((tempByte = inputStream.read()) != -1) {
-                outputStream.write(tempByte);
-            }
-            encryptedZipFile = outputStream.toByteArray();
-            decryptedZipFile = new byte[encryptedZipFile.length];
-            inputStreamDecryptedZipFile = new ByteArrayInputStream(decryptedZipFile);
+            file = create(inputStream);
         } finally {
             if (inputStream != null) {
                 inputStream.close();
             }
+        }
+
+        return file;
+    }
+
+    public static EncryptedZipFile create(InputStream inputStream) throws IOException {
+        EncryptedZipFile file = new EncryptedZipFile();
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try {
+            int tempByte;
+            while ((tempByte = inputStream.read()) != -1) {
+                outputStream.write(tempByte);
+            }
+
+            file.encryptedZipFile = outputStream.toByteArray();
+            file.decryptedZipFile = new byte[file.encryptedZipFile.length];
+            file.inputStreamDecryptedZipFile = new ByteArrayInputStream(file.decryptedZipFile);
+        } finally {
             outputStream.close();
         }
+
+        return file;
     }
 
     private static boolean decryptAndCompareByte(int expectedValue, byte byteToDecryptAndTest, int keyByte) {
         return expectedValue == ((byteToDecryptAndTest ^ keyByte) & 0x000000FF);
+    }
+
+    private EncryptedZipFile() {
+    }
+
+    public EncryptedZipFile clone() {
+        try (ByteArrayInputStream is = new ByteArrayInputStream(this.encryptedZipFile)) {
+            return create(new ByteArrayInputStream(this.encryptedZipFile));
+        } catch (IOException ignored) {
+        }
+
+        return null;
     }
 
     /**
@@ -103,11 +129,11 @@ public class EncryptedZipFile {
             try {
                 if (zip != null) {
                     zip.close();
-                    zip = null;
                 }
             } catch (IOException e) {
                 return false;
             }
+            zip = null;
         }
     }
 

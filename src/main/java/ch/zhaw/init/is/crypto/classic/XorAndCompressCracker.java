@@ -4,16 +4,28 @@ import ch.zhaw.init.is.util.ProgressInfo;
 
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.util.Optional;
+import java.util.Spliterators;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
+
+import static java.util.Spliterator.DISTINCT;
+import static java.util.Spliterator.NONNULL;
 
 public class XorAndCompressCracker implements ProgressInfo {
     private EncryptedZipFile encryptedZipFile;
-    private long numberOfKeysTested;
+    private AtomicLong numberOfKeysTested = new AtomicLong();
     private long totalNumberOfKeysToTest;
 
 
-    public XorAndCompressCracker(String filename)
-            throws IOException {
-        encryptedZipFile = new EncryptedZipFile(filename);
+    public XorAndCompressCracker(String filename) throws IOException {
+        encryptedZipFile = EncryptedZipFile.create(filename);
     }
 
 
@@ -27,15 +39,33 @@ public class XorAndCompressCracker implements ProgressInfo {
      */
     public int[] determineKey(int keylength, int depth) throws IOException {
         totalNumberOfKeysToTest = getNumberOfCandidateKeys(keylength, depth);
-        numberOfKeysTested = 0;
+        numberOfKeysTested.set(0);
         ByteFrequencyTable[] frequencyTable = getFrequencyTableForKeyLength(keylength);
         int[] key = null;
 
-        //TODO
+        ExecutorService pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
-        return key;
+        KeyGenerator keyGenerator = new KeyGenerator(frequencyTable, depth, 0);
+        keyGenerator.getKeyStream()
+                .map(k -> CompletableFuture.supplyAsync(() -> {
+                    numberOfKeysTested.incrementAndGet();
+                    if (encryptedZipFile.clone().tryDecryption(k)) return Optional.of(k);
+                    else return Optional.empty();
+                }, pool))
+                .map(f -> {
+                    try {
+                        return f.get();
+                    } catch (InterruptedException | ExecutionException e) {
+                    }
+
+                    return Optional.empty();
+                })
+                .filter(Optional::isPresent)
+                .findFirst();
+
+
+        return null;
     }
-
 
     private ByteFrequencyTable[] getFrequencyTableForKeyLength(int keylength) throws IOException {
         DataInputStream inputStream = encryptedZipFile.getDataInputStream();
@@ -61,7 +91,7 @@ public class XorAndCompressCracker implements ProgressInfo {
      */
     @Override
     public double getProgressAbsolute() {
-        return this.numberOfKeysTested;
+        return this.numberOfKeysTested.get();
     }
 
 
@@ -70,7 +100,7 @@ public class XorAndCompressCracker implements ProgressInfo {
      */
     @Override
     public double getProgressInPercent() {
-        return numberOfKeysTested / (double) totalNumberOfKeysToTest * 100;
+        return numberOfKeysTested.get() / (double) totalNumberOfKeysToTest * 100;
     }
 
 
@@ -158,6 +188,19 @@ class KeyGenerator {
         }
         updateCandidateCombination();
         return key;
+    }
+
+    public Stream<int[]> getKeyStream() {
+        return StreamSupport.stream(new Spliterators.AbstractSpliterator<int[]>(Long.MAX_VALUE, DISTINCT | NONNULL) {
+            @Override public boolean tryAdvance(Consumer<? super int[]> action) {
+                int[] key = getNextCandidateKey();
+
+                if (key == null) return false;
+                else action.accept(key);
+
+                return true;
+            }
+        }, false);
     }
 
 
