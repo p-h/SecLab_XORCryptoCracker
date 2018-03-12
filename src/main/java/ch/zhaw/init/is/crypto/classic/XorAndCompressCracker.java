@@ -20,12 +20,14 @@ import static java.util.Spliterator.NONNULL;
 
 public class XorAndCompressCracker implements ProgressInfo {
     private EncryptedZipFile encryptedZipFile;
+    private ThreadLocal<EncryptedZipFile> localEncryptedZipFile;
     private AtomicLong numberOfKeysTested = new AtomicLong();
     private long totalNumberOfKeysToTest;
 
 
     public XorAndCompressCracker(String filename) throws IOException {
         encryptedZipFile = EncryptedZipFile.create(filename);
+        localEncryptedZipFile = ThreadLocal.withInitial(encryptedZipFile::clone);
     }
 
 
@@ -43,13 +45,14 @@ public class XorAndCompressCracker implements ProgressInfo {
         ByteFrequencyTable[] frequencyTable = getFrequencyTableForKeyLength(keylength);
         int[] key = null;
 
-        ExecutorService pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        ExecutorService pool = Executors.newWorkStealingPool();
 
         KeyGenerator keyGenerator = new KeyGenerator(frequencyTable, depth, 0);
         keyGenerator.getKeyStream()
                 .map(k -> CompletableFuture.supplyAsync(() -> {
+                    new ThreadLocal<EncryptedZipFile>();
                     numberOfKeysTested.incrementAndGet();
-                    if (encryptedZipFile.clone().tryDecryption(k)) return Optional.of(k);
+                    if (localEncryptedZipFile.get().tryDecryption(k)) return Optional.of(k);
                     else return Optional.empty();
                 }, pool))
                 .map(f -> {
@@ -200,7 +203,7 @@ class KeyGenerator {
 
                 return true;
             }
-        }, false);
+        }, true);
     }
 
 
